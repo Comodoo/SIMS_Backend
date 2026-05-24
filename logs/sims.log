@@ -1,0 +1,144 @@
+Watching for file changes with StatReloader
+Not Found: /
+"GET / HTTP/1.1" 404 2489
+Not Found: /favicon.ico
+"GET /favicon.ico HTTP/1.1" 404 2540
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"OPTIONS /graphql HTTP/1.1" 200 0
+Internal Server Error: /graphql
+Traceback (most recent call last):
+  File "C:\Users\AL MUZANY\AppData\Local\Programs\Python\Python310\lib\site-packages\django\core\handlers\exception.py", line 55, in inner
+    response = get_response(request)
+  File "C:\Users\AL MUZANY\AppData\Local\Programs\Python\Python310\lib\site-packages\django\utils\deprecation.py", line 136, in __call__
+    response = self.process_response(request, response)
+  File "C:\Users\AL MUZANY\AppData\Local\Programs\Python\Python310\lib\site-packages\django\middleware\common.py", line 108, in process_response
+    return self.response_redirect_class(self.get_full_path_with_slash(request))
+  File "C:\Users\AL MUZANY\AppData\Local\Programs\Python\Python310\lib\site-packages\django\middleware\common.py", line 87, in get_full_path_with_slash
+    raise RuntimeError(
+RuntimeError: You called this URL via POST, but the URL doesn't end in a slash and you have APPEND_SLASH set. Django can't redirect to the slash URL while maintaining POST data. Change your form to point to localhost:8000/graphql/ (note the trailing slash), or set APPEND_SLASH=False in your Django settings.
+"POST /graphql HTTP/1.1" 500 75714
+Forbidden (CSRF cookie not set.): /graphql/
+"POST /graphql/ HTTP/1.1" 403 2870
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\sims_backend\graphql_urls.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\sims_backend\graphql_urls.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"POST /graphql/ HTTP/1.1" 200 2220
+"OPTIONS /graphql/ HTTP/1.1" 200 0
+"POST /graphql/ HTTP/1.1" 200 485
+"POST /graphql/ HTTP/1.1" 200 485
+"POST /graphql/ HTTP/1.1" 200 485
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"POST /graphql/ HTTP/1.1" 200 157
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"POST /graphql/ HTTP/1.1" 200 307
+"POST /graphql/ HTTP/1.1" 200 307
+"POST /graphql/ HTTP/1.1" 200 1512
+"POST /graphql/ HTTP/1.1" 200 1512
+"POST /graphql/ HTTP/1.1" 200 1512
+Bad Request: /graphql/
+Bad Request: /graphql/
+"POST /graphql/ HTTP/1.1" 400 75
+"POST /graphql/ HTTP/1.1" 400 75
+Bad Request: /graphql/
+Bad Request: /graphql/
+"POST /graphql/ HTTP/1.1" 400 75
+"POST /graphql/ HTTP/1.1" 400 75
+Bad Request: /graphql/
+Bad Request: /graphql/
+"POST /graphql/ HTTP/1.1" 400 75
+"POST /graphql/ HTTP/1.1" 400 75
+"POST /graphql/ HTTP/1.1" 200 1512
+"POST /graphql/ HTTP/1.1" 200 1512
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+Watching for file changes with StatReloader
+"OPTIONS /graphql/ HTTP/1.1" 200 0
+"POST /graphql/ HTTP/1.1" 200 97
+"POST /graphql/ HTTP/1.1" 200 29
+"POST /graphql/ HTTP/1.1" 200 97
+"POST /graphql/ HTTP/1.1" 200 97
+"POST /graphql/ HTTP/1.1" 200 97
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\schema\core_schema.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\queries\core_queries.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\sims_backend\settings.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\signals.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\core\queries\core_queries.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\sims_backend\settings.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\mutations\academics_mutations.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\queries\academics_queries.py changed, reloading.
+Watching for file changes with StatReloader
+C:\Users\AL MUZANY\Documents\Dev\SIMS_Backend\academics\schema\academics_schema.py changed, reloading.
+Watching for file changes with StatReloader
