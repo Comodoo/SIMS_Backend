@@ -10,9 +10,12 @@ from sims_backend import graphql_urls
 urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
-    
+
     # GraphQL
     path('', include(graphql_urls)),
+
+    # REST: file upload
+    path('api/', include('academics.urls')),
 ]
 
 # Serve media files in development

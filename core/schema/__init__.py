@@ -8,7 +8,10 @@ from .core_schema import (
     StaffType,
     AttendanceType,
     StudentAttendanceType,
-    ParentType,
+    RegisterStudentInput,
+    RegisterStaffInput,
+    UpdateStudentInput,
+    SelfRegisterStudentInput,
 )
 
 from .additional_core_schema import (
@@ -22,7 +25,6 @@ __all__ = [
     'StaffType',
     'AttendanceType',
     'StudentAttendanceType',
-    'ParentType',
     'RefreshTokenType',
     'AuditLogType',
 ]

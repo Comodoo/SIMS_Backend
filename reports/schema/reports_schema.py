@@ -3,6 +3,7 @@ Reports GraphQL Schema (Strawberry)
 System Reports and Audit Logs
 """
 
+import json
 import strawberry
 from typing import Optional, List
 from datetime import datetime, date
@@ -43,8 +44,8 @@ class ReportType:
             format=instance.format,
             generated_by=UserType.from_model(instance.generated_by),
             status=instance.status,
-            parameters=str(instance.parameters) if instance.parameters else None,
-            data=str(instance.data) if instance.data else None,
+            parameters=json.dumps(instance.parameters) if instance.parameters else None,
+            data=json.dumps(instance.data) if instance.data else None,
             file_url=instance.file_url,
             file_size=instance.file_size,
             generated_at=instance.generated_at,

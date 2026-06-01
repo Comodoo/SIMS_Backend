@@ -3,7 +3,7 @@ Django Admin Configuration for Core Models
 """
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Student, Staff, Attendance, StudentAttendance, Parent, ParentStudentLink
+from .models import User, Student, Staff, Attendance, StudentAttendance
 
 
 @admin.register(User)
@@ -66,18 +66,3 @@ class StudentAttendanceAdmin(admin.ModelAdmin):
     date_hierarchy = 'date'
 
 
-@admin.register(Parent)
-class ParentAdmin(admin.ModelAdmin):
-    """Parent admin configuration."""
-    list_display = ['full_name', 'phone', 'relationship', 'emergency_contact']
-    list_filter = ['relationship', 'emergency_contact']
-    search_fields = ['first_name', 'last_name', 'phone', 'email']
-    readonly_fields = ['parent_id', 'created_at', 'updated_at']
-
-
-@admin.register(ParentStudentLink)
-class ParentStudentLinkAdmin(admin.ModelAdmin):
-    """Parent-student link admin configuration."""
-    list_display = ['parent', 'student', 'is_primary']
-    list_filter = ['is_primary']
-    search_fields = ['parent__first_name', 'student__first_name']

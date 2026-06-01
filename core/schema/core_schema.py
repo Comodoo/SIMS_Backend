@@ -1,14 +1,13 @@
 """
 Core GraphQL Schema (Strawberry)
-Users, Students, Staff, Attendance, Parents, RefreshTokens, AuditLog
-Part of 21-Table Schema Implementation
+Users, Students, Staff, Attendance, RefreshTokens, AuditLog
 """
 
 import strawberry
 from typing import Optional, List
 from datetime import datetime, date, time
 from decimal import Decimal
-from core.models.core_models import User, Student, Staff, Attendance, StudentAttendance, Parent
+from core.models.core_models import User, Student, Staff, Attendance, StudentAttendance, AttendanceSession, SystemSettings
 
 
 @strawberry.type
@@ -111,7 +110,7 @@ class StaffType:
         return cls(
             id=strawberry.ID(str(instance.staff_id)),
             user=UserType.from_model(instance.user),
-            department_id=strawberry.ID(str(instance.department.dept_id)),
+            department_id=strawberry.ID(str(instance.department.dept_id)) if instance.department else strawberry.ID(''),
             staff_number=instance.staff_number,
             position=instance.position,
             department_name=instance.department.name if instance.department else "N/A",
@@ -162,62 +161,100 @@ class AttendanceType:
 
 @strawberry.type
 class StudentAttendanceType:
-    """GraphQL type for StudentAttendance (updated for 21-table schema with frontend compatibility)"""
+    """GraphQL type for StudentAttendance"""
     id: strawberry.ID
     studentId: strawberry.ID
+    studentName: str
     courseId: strawberry.ID
+    courseName: str
     date: date
     status: str
-    remarks: Optional[str] = None
-    recordedBy: strawberry.ID
-    recordedAt: datetime
-    
+    method: str
+    markedAt: Optional[datetime] = None
+    markedById: Optional[strawberry.ID] = None
+    markedByName: Optional[str] = None
+
     @classmethod
     def from_model(cls, instance: StudentAttendance):
-        """Convert model instance to GraphQL type"""
+        marker = instance.marked_by
         return cls(
             id=strawberry.ID(str(instance.record_id)),
             studentId=strawberry.ID(str(instance.student.student_id)),
+            studentName=instance.student.full_name,
             courseId=strawberry.ID(str(instance.course.course_id)),
+            courseName=instance.course.name,
             date=instance.date,
             status=instance.status,
-            remarks=instance.remarks,
-            recordedBy=strawberry.ID(str(instance.marked_by.user_id)) if instance.marked_by else None,
-            recordedAt=instance.marked_at,
+            method=instance.method,
+            markedAt=instance.marked_at,
+            markedById=strawberry.ID(str(marker.staff_id)) if marker else None,
+            markedByName=marker.user.get_full_name() if marker else None,
         )
 
 
 @strawberry.type
-class ParentType:
-    """GraphQL type for Parent"""
+class AttendanceSessionType:
+    """GraphQL type for AttendanceSession"""
     id: strawberry.ID
-    user: Optional[UserType] = None
-    firstName: str
-    lastName: str
-    phone: str
-    email: Optional[str] = None
-    relationship: str
-    address: Optional[str] = None
-    emergencyContact: bool
+    courseId: strawberry.ID
+    courseName: str
+    semesterId: Optional[strawberry.ID] = None
+    date: date
+    conductedById: Optional[strawberry.ID] = None
+    conductedByName: Optional[str] = None
+    wasHeld: bool
+    cancellationReason: Optional[str] = None
     createdAt: datetime
-    updatedAt: datetime
-    
+
     @classmethod
-    def from_model(cls, instance: Parent):
-        """Convert model instance to GraphQL type"""
+    def from_model(cls, instance: AttendanceSession):
+        conductor = instance.conducted_by
         return cls(
-            id=strawberry.ID(str(instance.parent_id)),
-            user=UserType.from_model(instance.user) if instance.user else None,
-            firstName=instance.first_name,
-            lastName=instance.last_name,
-            phone=instance.phone,
-            email=instance.email,
-            relationship=instance.relationship,
-            address=instance.address,
-            emergencyContact=instance.emergency_contact,
+            id=strawberry.ID(str(instance.session_id)),
+            courseId=strawberry.ID(str(instance.course.course_id)),
+            courseName=instance.course.name,
+            semesterId=strawberry.ID(str(instance.semester_id)) if instance.semester_id else None,
+            date=instance.date,
+            conductedById=strawberry.ID(str(conductor.staff_id)) if conductor else None,
+            conductedByName=conductor.user.get_full_name() if conductor else None,
+            wasHeld=instance.was_held,
+            cancellationReason=instance.cancellation_reason,
             createdAt=instance.created_at,
+        )
+
+
+@strawberry.type
+class SystemSettingType:
+    """GraphQL type for SystemSettings"""
+    id: strawberry.ID
+    key: str
+    value: str
+    description: Optional[str] = None
+    updatedAt: datetime
+
+    @classmethod
+    def from_model(cls, instance: SystemSettings):
+        return cls(
+            id=strawberry.ID(str(instance.setting_id)),
+            key=instance.key,
+            value=instance.value,
+            description=instance.description,
             updatedAt=instance.updated_at,
         )
+
+
+@strawberry.type
+class StudentAttendanceRateType:
+    """Aggregate attendance rate for a student in a course"""
+    courseId: strawberry.ID
+    courseName: str
+    totalSessions: int
+    present: int
+    late: int
+    absent: int
+    excused: int
+    attendanceRate: float
+    belowThreshold: bool
 
 
 # Input Types for Mutations
@@ -270,6 +307,61 @@ class AttendanceInput:
     notes: Optional[str] = None
 
 
+@strawberry.input
+class RegisterStudentInput:
+    """Flat input for admin to register a new student (creates User + Student profile)"""
+    username: str
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    student_number: str
+    grade_level: Optional[str] = None
+    section: Optional[str] = None
+    department_id: Optional[strawberry.ID] = None
+    academic_year: str = ""
+    phone: Optional[str] = None
+
+
+@strawberry.input
+class SelfRegisterStudentInput:
+    """Minimal input for a student to self-register (no admin privileges required)."""
+    username: str
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    class_group_id: Optional[strawberry.ID] = None
+
+
+@strawberry.input
+class UpdateStudentInput:
+    """Fields for updating an existing student (all optional)."""
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    grade_level: Optional[str] = None
+    section: Optional[str] = None
+    status: Optional[str] = None
+    address: Optional[str] = None
+
+
+@strawberry.input
+class RegisterStaffInput:
+    """Flat input for admin to register a new staff/teacher (creates User + Staff profile)"""
+    username: str
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+    staff_number: str
+    position: str
+    department_id: strawberry.ID
+    phone: Optional[str] = None
+
+
 # Response Types for Mutations
 @strawberry.type
 class UserMutationResponse:
@@ -285,3 +377,31 @@ class AttendanceMutationResponse:
     success: bool
     message: str
     attendance: Optional[AttendanceType] = None
+
+
+@strawberry.type
+class ClassGroupType:
+    id: strawberry.ID
+    name: str
+    student_count: int = strawberry.field(name="studentCount")
+    active_count: int = strawberry.field(name="activeCount")
+    created_at: datetime = strawberry.field(name="createdAt")
+    parent_id: Optional[strawberry.ID] = strawberry.field(name="parentId", default=None)
+
+    @classmethod
+    def from_model(cls, instance, student_count: int = 0, active_count: int = 0):
+        return cls(
+            id=strawberry.ID(str(instance.id)),
+            name=instance.name,
+            student_count=student_count,
+            active_count=active_count,
+            created_at=instance.created_at,
+            parent_id=strawberry.ID(str(instance.parent_id)) if instance.parent_id else None,
+        )
+
+
+@strawberry.type
+class ClassGroupMutationResponse:
+    success: bool
+    message: str
+    class_group: Optional[ClassGroupType] = strawberry.field(name="classGroup", default=None)

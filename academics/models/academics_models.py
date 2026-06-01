@@ -1,6 +1,6 @@
 """
-Academics Models - Courses, Enrollment, Assignments, Submissions
-Part of 21-Table Schema Implementation
+Academics Models - Courses/Subjects, Enrollment, Assignments, Submissions,
+SubjectTeacher (many-to-many), Timetable
 """
 import uuid
 from django.db import models
@@ -39,9 +39,11 @@ class Course(models.Model):
     )
     department = models.ForeignKey(
         'academics.Department',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='courses',
-        help_text="Department FK"
+        help_text="Department FK (optional)"
     )
     staff = models.ForeignKey(
         'core.Staff',
@@ -54,10 +56,12 @@ class Course(models.Model):
     )
     semester = models.ForeignKey(
         'academics.Semester',
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='courses',
         db_column='semester_id',
-        help_text="Semester FK"
+        help_text="Semester FK (optional)"
     )
     credits = models.IntegerField(
         default=3,
@@ -73,9 +77,15 @@ class Course(models.Model):
         default='active',
         help_text="Course status"
     )
+    class_group = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Class group this subject belongs to, e.g. Form 1, Form 2"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'courses'
         verbose_name = 'Course'
@@ -331,3 +341,125 @@ class Submission(models.Model):
             if self.submitted_at > self.assignment.due_date:
                 self.status = 'late'
         super().save(*args, **kwargs)
+
+
+# ============================================================================
+# SUBJECT-TEACHER JUNCTION (many teachers per subject, many subjects per teacher)
+# ============================================================================
+
+class SubjectTeacher(models.Model):
+    """
+    Links teachers (Staff) to subjects (Course).
+    Replaces the single Course.staff FK to support multiple teachers per subject.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subject = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='subject_teachers',
+        help_text="The subject being taught"
+    )
+    teacher = models.ForeignKey(
+        'core.Staff',
+        on_delete=models.CASCADE,
+        related_name='subject_assignments',
+        help_text="The teacher assigned to this subject"
+    )
+    assigned_by = models.ForeignKey(
+        'core.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='teacher_assignments_made',
+        help_text="Admin who made the assignment"
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Primary teacher for this subject (for display and attendance marking)"
+    )
+
+    class Meta:
+        db_table = 'subject_teachers'
+        unique_together = ['subject', 'teacher']
+        verbose_name = 'Subject Teacher'
+        verbose_name_plural = 'Subject Teachers'
+        indexes = [
+            models.Index(fields=['subject']),
+            models.Index(fields=['teacher']),
+        ]
+
+    def __str__(self):
+        return f"{self.teacher.user.get_full_name()} → {self.subject.name}"
+
+
+# ============================================================================
+# TIMETABLE (class schedule slots per subject/teacher/class group)
+# ============================================================================
+
+class Timetable(models.Model):
+    """
+    Weekly timetable slots. Each row is one period in the weekly schedule.
+    A subject can have multiple slots per week.
+    """
+    DAY_CHOICES = [
+        ('monday', 'Monday'),
+        ('tuesday', 'Tuesday'),
+        ('wednesday', 'Wednesday'),
+        ('thursday', 'Thursday'),
+        ('friday', 'Friday'),
+        ('saturday', 'Saturday'),
+    ]
+
+    timetable_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subject = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name='timetable_slots',
+        help_text="The subject for this slot"
+    )
+    teacher = models.ForeignKey(
+        'core.Staff',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='timetable_slots',
+        help_text="Teacher taking this slot"
+    )
+    semester = models.ForeignKey(
+        'academics.Semester',
+        on_delete=models.CASCADE,
+        related_name='timetable_slots',
+        help_text="Semester this slot belongs to"
+    )
+    class_group = models.CharField(
+        max_length=50,
+        help_text="e.g. Form 3A, Form 4B"
+    )
+    day_of_week = models.CharField(
+        max_length=10,
+        choices=DAY_CHOICES,
+        help_text="Day of the week"
+    )
+    start_time = models.TimeField(help_text="Period start time e.g. 08:00")
+    end_time = models.TimeField(help_text="Period end time e.g. 09:00")
+    room = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Classroom or lab"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'timetable'
+        verbose_name = 'Timetable Slot'
+        verbose_name_plural = 'Timetable Slots'
+        indexes = [
+            models.Index(fields=['semester']),
+            models.Index(fields=['class_group']),
+            models.Index(fields=['teacher']),
+            models.Index(fields=['day_of_week']),
+        ]
+
+    def __str__(self):
+        return f"{self.class_group} | {self.subject.name} | {self.day_of_week} {self.start_time}-{self.end_time}"

@@ -70,20 +70,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'sims_backend.wsgi.application'
 ASGI_APPLICATION = 'sims_backend.asgi.application'
 
-# Database - SQLite for development, MySQL for production
-if config('USE_MYSQL', default='False', cast=bool):
+# Database - SQLite for development, PostgreSQL for production
+if config('USE_POSTGRES', default='False', cast=bool):
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.mysql',
+            'ENGINE': 'django.db.backends.postgresql',
             'NAME': config('DB_NAME', default='sims'),
-            'USER': config('DB_USER', default='root'),
-            'PASSWORD': config('DB_PASSWORD', default=''),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default='123'),
             'HOST': config('DB_HOST', default='localhost'),
-            'PORT': config('DB_PORT', default='3306'),
-            'OPTIONS': {
-                'charset': 'utf8mb4',
-                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
+            'PORT': config('DB_PORT', default='5432'),
         }
     }
 else:
@@ -94,34 +90,45 @@ else:
         }
     }
 
-# Cache - Redis
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+# Cache — use in-memory when Redis is not available
+REDIS_URL = os.environ.get('REDIS_URL', '')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {'CLIENT_CLASS': 'django_redis.client.DefaultClient'},
         }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
 
-# Celery Configuration
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+# Celery — only connect when broker is explicitly set
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'memory://')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'cache+memory://')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Africa/Nairobi'
 
-# Channels (WebSockets)
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [(os.environ.get('REDIS_HOST', '127.0.0.1'), 6379)],
+# Channels — use in-memory when Redis is not available
+if REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [REDIS_URL]},
         },
-    },
-}
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

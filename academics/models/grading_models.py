@@ -1,6 +1,5 @@
 """
-Grading Models - GradeComponents, StudentGradeComponents
-Part of 21-Table Schema Implementation
+Grading Models - GradeComponents, StudentGradeComponents, ResultCard
 """
 import uuid
 from django.db import models
@@ -130,3 +129,102 @@ class StudentGradeComponent(models.Model):
     
     def __str__(self):
         return f"{self.enrollment.student.full_name} - {self.component.name}: {self.score or 'Not graded'}"
+
+
+# ============================================================================
+# RESULT CARD (per-subject, per-semester result for a student)
+# ============================================================================
+
+class ResultCard(models.Model):
+    """
+    Aggregated result for one student in one subject for one semester.
+    Computed from StudentGradeComponent scores.
+    Admin/teacher runs compute_result_card mutation to populate this.
+    """
+    GRADE_CHOICES = [
+        ('A', 'A — Excellent (80-100)'),
+        ('B', 'B — Good (70-79)'),
+        ('C', 'C — Average (60-69)'),
+        ('D', 'D — Below Average (50-59)'),
+        ('E', 'E — Poor (40-49)'),
+        ('F', 'F — Fail (0-39)'),
+    ]
+
+    result_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student = models.ForeignKey(
+        'core.Student',
+        on_delete=models.CASCADE,
+        related_name='result_cards',
+        help_text="Student this result belongs to"
+    )
+    subject = models.ForeignKey(
+        'academics.Course',
+        on_delete=models.CASCADE,
+        related_name='result_cards',
+        help_text="Subject/course"
+    )
+    semester = models.ForeignKey(
+        'academics.Semester',
+        on_delete=models.CASCADE,
+        related_name='result_cards',
+        help_text="Semester/term"
+    )
+    cat1_score = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="CAT 1 score"
+    )
+    cat2_score = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="CAT 2 score"
+    )
+    exam_score = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Final exam score"
+    )
+    total_score = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True,
+        help_text="Weighted total (computed)"
+    )
+    grade_letter = models.CharField(
+        max_length=2, choices=GRADE_CHOICES, null=True, blank=True
+    )
+    remarks = models.TextField(null=True, blank=True)
+    computed_by = models.ForeignKey(
+        'core.Staff',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='computed_results',
+        help_text="Teacher who computed/approved this result"
+    )
+    computed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'result_cards'
+        unique_together = ['student', 'subject', 'semester']
+        verbose_name = 'Result Card'
+        verbose_name_plural = 'Result Cards'
+        indexes = [
+            models.Index(fields=['student']),
+            models.Index(fields=['semester']),
+            models.Index(fields=['subject']),
+        ]
+
+    def __str__(self):
+        return f"{self.student.full_name} | {self.subject.name} | {self.semester.name} — {self.grade_letter or 'Pending'}"
+
+    def compute_grade_letter(self):
+        """Derive grade letter from total_score."""
+        if self.total_score is None:
+            return None
+        score = float(self.total_score)
+        if score >= 80:
+            return 'A'
+        elif score >= 70:
+            return 'B'
+        elif score >= 60:
+            return 'C'
+        elif score >= 50:
+            return 'D'
+        elif score >= 40:
+            return 'E'
+        return 'F'

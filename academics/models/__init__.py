@@ -1,5 +1,6 @@
 """
-Academics Models - Courses, Enrollment, Assignments, Submissions, Departments, Semesters, GradeComponents
+Academics Models - Courses/Subjects, Enrollment, Assignments, Submissions,
+Departments, Semesters, GradeComponents, SubjectTeacher, Timetable, ResultCard
 """
 
 from .academics_models import (
@@ -7,6 +8,8 @@ from .academics_models import (
     Enrollment,
     Assignment,
     Submission,
+    SubjectTeacher,
+    Timetable,
 )
 
 from .academic_structure_models import (
@@ -17,6 +20,7 @@ from .academic_structure_models import (
 from .grading_models import (
     GradeComponent,
     StudentGradeComponent,
+    ResultCard,
 )
 
 __all__ = [
@@ -24,8 +28,11 @@ __all__ = [
     'Enrollment',
     'Assignment',
     'Submission',
+    'SubjectTeacher',
+    'Timetable',
     'Department',
     'Semester',
     'GradeComponent',
     'StudentGradeComponent',
+    'ResultCard',
 ]

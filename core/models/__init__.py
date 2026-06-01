@@ -1,5 +1,5 @@
 """
-Core Models - Users, Students, Staff, Attendance, Parents, RefreshTokens, AuditLog
+Core Models - Users, Students, Staff, Attendance, RefreshTokens, AuditLog
 """
 
 from .core_models import (
@@ -8,10 +8,9 @@ from .core_models import (
     Staff,
     Attendance,
     StudentAttendance,
-    Parent,
-    ParentStudentLink,
     RefreshToken,
     AuditLog,
+    ClassGroup,
 )
 
 __all__ = [
@@ -20,8 +19,7 @@ __all__ = [
     'Staff',
     'Attendance',
     'StudentAttendance',
-    'Parent',
-    'ParentStudentLink',
     'RefreshToken',
     'AuditLog',
+    'ClassGroup',
 ]

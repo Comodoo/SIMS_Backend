@@ -13,6 +13,7 @@ logger.info("Initializing GraphQL schema...")
 logger.debug("Loading Core schemas...")
 from core.queries.core_queries import CoreQuery
 from core.mutations.core_mutations import CoreMutation
+from core.mutations.biometric_mutations import BiometricMutation
 
 logger.debug("Loading Academics schemas...")
 from academics.queries.academics_queries import AcademicsQuery
@@ -48,6 +49,7 @@ class Query(
 @strawberry.type
 class Mutation(
     CoreMutation,
+    BiometricMutation,
     AcademicsMutation,
     HrMutation,
     CommunicationMutation,

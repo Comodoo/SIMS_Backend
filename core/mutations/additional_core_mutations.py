@@ -65,6 +65,20 @@ class RefreshTokenMutations:
             )
     
     @strawberry.mutation
+    def revoke_all_sessions(self, user_id: Optional[strawberry.ID] = None) -> RefreshTokenResponse:
+        """Revoke all active sessions. If user_id is given, revoke only that user's tokens."""
+        try:
+            from django.utils import timezone as tz
+            qs = RefreshToken.objects.filter(revoked=False, expires_at__gt=tz.now())
+            if user_id:
+                qs = qs.filter(user_id=user_id)
+            count = qs.update(revoked=True)
+            scope = f"for user" if user_id else "system-wide"
+            return RefreshTokenResponse(success=True, message=f"{count} session(s) revoked {scope}")
+        except Exception as e:
+            return RefreshTokenResponse(success=False, message=f"Error: {str(e)}")
+
+    @strawberry.mutation
     def revoke_refresh_token(self, token_id: strawberry.ID) -> RefreshTokenResponse:
         """Revoke a refresh token"""
         try:

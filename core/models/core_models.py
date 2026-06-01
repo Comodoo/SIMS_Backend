@@ -23,7 +23,6 @@ class User(AbstractUser):
         ('admin', 'Administrator'),
         ('staff', 'Staff Member'),
         ('student', 'Student'),
-        ('parent', 'Parent/Guardian'),
     ]
     
     user_id = models.UUIDField(
@@ -38,12 +37,20 @@ class User(AbstractUser):
         default='student',
         help_text="User role for RBAC"
     )
-    # Biometric hash stored as encrypted string (not the actual fingerprint image)
-    biometric_hash = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Encrypted fingerprint template hash (AES-256)"
-    )
+    # Legacy biometric hash field (kept for backwards compatibility)
+    biometric_hash = models.TextField(null=True, blank=True)
+
+    # WebAuthn (FIDO2) — phone/hardware fingerprint sensor
+    webauthn_credential_id = models.BinaryField(null=True, blank=True)
+    webauthn_public_key = models.BinaryField(null=True, blank=True)
+    webauthn_sign_count = models.IntegerField(default=0)
+    # Temporary challenge stored during a registration/auth ceremony (expires in 5 min)
+    webauthn_challenge = models.CharField(max_length=500, null=True, blank=True)
+    webauthn_challenge_expires = models.DateTimeField(null=True, blank=True)
+
+    # Face recognition — 128-float embedding vector stored as JSON list
+    face_embedding = models.JSONField(null=True, blank=True)
+
     phone = models.CharField(
         max_length=20,
         null=True,
@@ -425,28 +432,36 @@ class Attendance(models.Model):
     
     def check_if_late(self):
         """
-        Check if clock-in is late based on staff's shift settings.
+        Compare clock-in time against the global SHIFT_START_TIME system setting.
+        Grace period from LATE_GRACE_MINUTES. Both settings are configured by admin.
         """
-        if self.status == 'in' and self.staff:
-            from datetime import datetime, timedelta
-            
-            # Get today's shift start time
-            shift_start = datetime.combine(
-                self.timestamp.date(),
-                self.staff.shift_start_time
-            )
-            threshold = timedelta(minutes=self.staff.late_threshold_minutes)
-            late_threshold = shift_start + threshold
-            
-            # Check if clock-in is past the threshold
-            if self.timestamp > late_threshold:
-                self.is_late = True
-                self.late_minutes = int((self.timestamp - shift_start).total_seconds() / 60)
-            else:
-                self.is_late = False
-                self.late_minutes = 0
-            
-            return self.is_late
+        if self.status != 'in':
+            return False
+
+        from datetime import datetime, timedelta, time as dt_time
+
+        global_start = SystemSettings.get_value('SHIFT_START_TIME', '')
+        if not global_start:
+            return False  # admin hasn't configured shift time yet
+
+        try:
+            h, m = global_start.split(':')
+            shift_start_time = dt_time(int(h), int(m))
+        except (ValueError, IndexError):
+            return False
+
+        grace_minutes = SystemSettings.get_int('LATE_GRACE_MINUTES', 15)
+        shift_start = datetime.combine(self.timestamp.date(), shift_start_time)
+        late_threshold = shift_start + timedelta(minutes=grace_minutes)
+        clock_in_naive = self.timestamp.replace(tzinfo=None) if self.timestamp.tzinfo else self.timestamp
+
+        if clock_in_naive > late_threshold:
+            self.is_late = True
+            self.late_minutes = int((clock_in_naive - shift_start).total_seconds() / 60)
+        else:
+            self.is_late = False
+            self.late_minutes = 0
+        return self.is_late
         return False
     
     def save(self, *args, **kwargs):
@@ -514,11 +529,15 @@ class StudentAttendance(models.Model):
         related_name='marked_attendance',
         help_text="Staff who marked attendance"
     )
-    notified_parent = models.BooleanField(
-        default=False,
-        help_text="Flipped after SMS sent"
+    method = models.CharField(
+        max_length=20,
+        default='manual',
+        help_text="How attendance was marked: manual | face | fingerprint",
     )
-    
+    marked_at = models.DateTimeField(
+        auto_now=True,
+        help_text="When this record was last updated",
+    )
     class Meta:
         db_table = 'student_attendance'
         verbose_name = 'Student Attendance'
@@ -535,111 +554,6 @@ class StudentAttendance(models.Model):
     
     def __str__(self):
         return f"{self.student.full_name} - {self.date} - {self.status}"
-
-
-# ============================================================================
-# PARENTS TABLE
-# ============================================================================
-
-class Parent(models.Model):
-    """
-    Parent/Guardian table for student notifications.
-    """
-    RELATIONSHIP_CHOICES = [
-        ('father', 'Father'),
-        ('mother', 'Mother'),
-        ('guardian', 'Guardian'),
-        ('other', 'Other'),
-    ]
-    
-    parent_id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False
-    )
-    user = models.OneToOneField(
-        User,
-        on_delete=models.CASCADE,
-        related_name='parent_profile',
-        null=True,
-        blank=True,
-        help_text="Optional portal access"
-    )
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    phone = models.CharField(
-        max_length=20,
-        validators=[RegexValidator(r'^\+?1?\d{9,15}$', 'Enter a valid phone number.')],
-        help_text="Primary contact for SMS notifications"
-    )
-    email = models.EmailField(null=True, blank=True)
-    relationship = models.CharField(max_length=20, choices=RELATIONSHIP_CHOICES)
-    address = models.TextField(null=True, blank=True)
-    emergency_contact = models.BooleanField(default=True)
-    # Notification preferences stored as JSON
-    notification_prefs = models.JSONField(
-        default=dict,
-        blank=True,
-        help_text="{absence_alerts: bool, grade_updates: bool, general_announcements: bool}"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'parents'
-        verbose_name = 'Parent/Guardian'
-        verbose_name_plural = 'Parents/Guardians'
-        indexes = [
-            models.Index(fields=['phone']),
-            models.Index(fields=['emergency_contact']),
-        ]
-    
-    def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.relationship})"
-    
-    @property
-    def full_name(self):
-        return f"{self.first_name} {self.last_name}"
-
-
-# ============================================================================
-# PARENT-STUDENT LINK TABLE
-# ============================================================================
-
-class ParentStudentLink(models.Model):
-    """
-    Many-to-Many link table between Parents and Students.
-    Allows multiple parents per student and vice versa.
-    """
-    link_id = models.UUIDField(
-        primary_key=True,
-        default=uuid.uuid4,
-        editable=False
-    )
-    parent = models.ForeignKey(
-        Parent,
-        on_delete=models.CASCADE,
-        related_name='student_links'
-    )
-    student = models.ForeignKey(
-        Student,
-        on_delete=models.CASCADE,
-        related_name='parent_links'
-    )
-    is_primary = models.BooleanField(
-        default=False,
-        help_text="Primary contact for emergency"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        db_table = 'parent_student_links'
-        unique_together = ['parent', 'student']
-        verbose_name = 'Parent-Student Link'
-        verbose_name_plural = 'Parent-Student Links'
-    
-    def __str__(self):
-        return f"{self.parent.full_name} - {self.student.full_name}"
 
 
 # ============================================================================
@@ -769,3 +683,161 @@ class AuditLog(models.Model):
     
     def __str__(self):
         return f"{self.action} on {self.target_table} by {self.actor.username} at {self.performed_at}"
+
+
+# ============================================================================
+# ENROLLMENT TOKENS  (one-time magic links for biometric self-registration)
+# ============================================================================
+
+class EnrollmentToken(models.Model):
+    """
+    Short-lived token that lets a user register their biometric without logging in.
+    Admin generates the token, shares the link, user opens it on their device.
+    """
+    ENROLL_CHOICES = [
+        ('fingerprint', 'Fingerprint (WebAuthn)'),
+        ('face', 'Face Recognition'),
+        ('both', 'Fingerprint + Face'),
+    ]
+
+    token_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='enrollment_tokens',
+    )
+    token = models.CharField(max_length=64, unique=True)
+    enrollment_type = models.CharField(max_length=20, choices=ENROLL_CHOICES, default='both')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_enrollment_tokens',
+    )
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'enrollment_tokens'
+        ordering = ['-expires_at']
+
+    def __str__(self):
+        return f"Token for {self.user.username} ({self.enrollment_type})"
+
+    @property
+    def is_valid(self):
+        from django.utils import timezone as tz
+        return self.used_at is None and tz.now() < self.expires_at
+
+    def mark_used(self):
+        from django.utils import timezone as tz
+        self.used_at = tz.now()
+        self.save(update_fields=['used_at'])
+
+
+# ============================================================================
+# ATTENDANCE SESSION  (tracks each class that was/wasn't held)
+# ============================================================================
+
+class AttendanceSession(models.Model):
+    """
+    Records whether a class session was held on a given date.
+    Used as the denominator when computing student attendance rates.
+    """
+    session_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(
+        'academics.Course',
+        on_delete=models.CASCADE,
+        related_name='attendance_sessions',
+    )
+    semester = models.ForeignKey(
+        'academics.Semester',
+        on_delete=models.PROTECT,
+        related_name='attendance_sessions',
+        null=True,
+        blank=True,
+    )
+    date = models.DateField()
+    conducted_by = models.ForeignKey(
+        Staff,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='conducted_sessions',
+    )
+    was_held = models.BooleanField(default=True)
+    cancellation_reason = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'attendance_sessions'
+        unique_together = ['course', 'date']
+        ordering = ['-date']
+
+    def __str__(self):
+        held = 'held' if self.was_held else 'cancelled'
+        return f"{self.course} on {self.date} ({held})"
+
+
+# ============================================================================
+# SYSTEM SETTINGS  (admin-configurable runtime parameters)
+# ============================================================================
+
+class SystemSettings(models.Model):
+    """
+    Key-value store for admin-configurable system parameters.
+    Keys: LATE_GRACE_MINUTES, ATTENDANCE_THRESHOLD_PERCENT, etc.
+    """
+    setting_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    key = models.CharField(max_length=100, unique=True)
+    value = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='setting_changes',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'system_settings'
+        ordering = ['key']
+
+    def __str__(self):
+        return f"{self.key} = {self.value}"
+
+    @classmethod
+    def get_value(cls, key: str, default: str = '') -> str:
+        try:
+            return cls.objects.get(key=key).value
+        except cls.DoesNotExist:
+            return default
+
+    @classmethod
+    def get_int(cls, key: str, default: int = 0) -> int:
+        try:
+            return int(cls.get_value(key, str(default)))
+        except (ValueError, TypeError):
+            return default
+
+
+# ============================================================================
+# CLASS GROUPS  (admin-managed list of valid class/form groups)
+# ============================================================================
+
+class ClassGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='sub_groups',
+        help_text="Parent level (e.g. Form 1 is parent of Form 1A, Form 1B)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'class_groups'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name

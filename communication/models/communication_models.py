@@ -23,7 +23,6 @@ class Announcement(models.Model):
         ('admin', 'Administrators'),
         ('staff', 'Staff Members'),
         ('student', 'Students'),
-        ('parent', 'Parents/Guardians'),
     ]
     
     ann_id = models.UUIDField(
@@ -158,13 +157,7 @@ class Notification(models.Model):
         null=True,
         blank=True,
         related_name='notifications',
-        help_text="User recipient (null for SMS to parents)"
-    )
-    recipient_phone = models.CharField(
-        max_length=20,
-        null=True,
-        blank=True,
-        help_text="Phone number for parent SMS alerts"
+        help_text="Notification recipient user"
     )
     type = models.CharField(
         max_length=20,
@@ -222,6 +215,4 @@ class Notification(models.Model):
         ]
     
     def __str__(self):
-        if self.recipient:
-            return f"{self.type} to {self.recipient.username}"
-        return f"{self.type} to {self.recipient_phone}"
+        return f"{self.type} to {self.recipient.username if self.recipient else 'unknown'}"
