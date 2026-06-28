@@ -3,6 +3,7 @@ Core GraphQL Mutations (Strawberry)
 """
 
 import strawberry
+import uuid as _uuid_mod
 from typing import Optional, List
 from django.contrib.auth import authenticate, get_user_model
 from django.utils import timezone
@@ -12,7 +13,47 @@ from django.utils import timezone
 class StudentAttendanceInput:
     student_id: strawberry.ID
     status: str  # present | absent | late | excused
-from core.models.core_models import User, Student, Staff, Attendance, StudentAttendance, AttendanceSession, SystemSettings
+from core.models.core_models import User, Student, Staff, Attendance, StudentAttendance, AttendanceSession, SystemSettings, RefreshToken, AuditLog
+
+
+# ---------------------------------------------------------------------------
+# Audit helpers
+# ---------------------------------------------------------------------------
+def _get_actor(info) -> Optional[User]:
+    """Identify the calling user from the Bearer token in the Authorization header."""
+    try:
+        request = getattr(getattr(info, 'context', None), 'request', None)
+        if not request:
+            return None
+        auth = request.META.get('HTTP_AUTHORIZATION', '')
+        if auth.startswith('Bearer '):
+            token = auth[7:].strip()
+            return User.objects.filter(user_id=token, is_active=True).first()
+    except Exception:
+        pass
+    return None
+
+
+def _get_ip(info) -> Optional[str]:
+    try:
+        request = getattr(getattr(info, 'context', None), 'request', None)
+        if not request:
+            return None
+        return (
+            (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR')
+        )
+    except Exception:
+        return None
+
+
+def _audit(actor: User, action: str, table: str, target_id, ip: Optional[str] = None):
+    """Append an immutable audit log entry; never raises."""
+    try:
+        tid = target_id if isinstance(target_id, _uuid_mod.UUID) else _uuid_mod.UUID(str(target_id))
+        AuditLog.objects.create(actor=actor, action=action, target_table=table, target_id=tid, ip_address=ip)
+    except Exception:
+        pass
 from core.schema.core_schema import (
     UserType, StudentType, StaffType, AttendanceType, StudentAttendanceType,
     AttendanceSessionType, SystemSettingType,
@@ -69,23 +110,47 @@ class CoreMutation:
     """GraphQL mutations for Core module"""
     
     @strawberry.mutation
-    def login(self, username: str, password: str, role: Optional[str] = None) -> LoginResponse:
+    def login(self, info: strawberry.types.Info, username: str, password: str, role: Optional[str] = None) -> LoginResponse:
         """Login user with username and password"""
         try:
             user = authenticate(username=username, password=password)
             if not user:
                 return LoginResponse(success=False, message="Invalid credentials")
-            
+
             # Check role if provided
             if role and user.role != role:
                 return LoginResponse(success=False, message=f"User is not a {role}")
-            
+
             if not user.is_active:
                 return LoginResponse(success=False, message="Account is inactive")
-            
-            # Generate token (using user_id as simple token for now - in production use JWT)
+
+            # Token is the user_id (simple auth used by this system)
             token = str(user.user_id)
-            
+
+            # Record session in RefreshToken table so Security Center can track it
+            from django.utils import timezone
+            from datetime import timedelta
+            request = getattr(info.context, 'request', None)
+            ip = None
+            device = None
+            if request:
+                ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR')
+                device = request.META.get('HTTP_USER_AGENT', '')[:255] or None
+            expires_at = timezone.now() + timedelta(days=30)
+            # update_or_create avoids unique constraint violation on repeated logins
+            RefreshToken.objects.update_or_create(
+                token_hash=token,
+                defaults={
+                    'user': user,
+                    'device_info': device,
+                    'ip_address': ip,
+                    'expires_at': expires_at,
+                    'revoked': False,
+                },
+            )
+
+            _audit(user, 'LOGIN', 'user', user.user_id, ip)
+
             return LoginResponse(
                 success=True,
                 message="Login successful",
@@ -123,8 +188,8 @@ class CoreMutation:
             user = User.objects.get(user_id=user_id)
             user.username = input.username
             user.email = input.email
-            user.first_name = input.first_name
-            user.last_name = input.last_name
+            user.first_name = input.firstName
+            user.last_name = input.lastName
             user.role = input.role
             user.phone = input.phone
             if input.password:
@@ -154,25 +219,33 @@ class CoreMutation:
             return CoreMutationResponse(success=False, message=f"Error: {str(e)}")
     
     @strawberry.mutation
-    def activate_user(self, user_id: strawberry.ID) -> CoreMutationResponse:
+    def activate_user(self, info: strawberry.types.Info, user_id: strawberry.ID) -> CoreMutationResponse:
         """Activate a user account"""
         try:
             user = User.objects.get(user_id=user_id)
             user.is_active = True
             user.save()
+            actor = _get_actor(info)
+            if actor:
+                _audit(actor, 'ACTIVATE_USER', 'user', user.user_id, _get_ip(info))
             return CoreMutationResponse(success=True, message="User activated successfully")
         except User.DoesNotExist:
             return CoreMutationResponse(success=False, message="User not found")
         except Exception as e:
             return CoreMutationResponse(success=False, message=f"Error: {str(e)}")
-    
+
     @strawberry.mutation
-    def deactivate_user(self, user_id: strawberry.ID) -> CoreMutationResponse:
+    def deactivate_user(self, info: strawberry.types.Info, user_id: strawberry.ID) -> CoreMutationResponse:
         """Deactivate a user account"""
         try:
             user = User.objects.get(user_id=user_id)
             user.is_active = False
             user.save()
+            # Also revoke all their sessions
+            RefreshToken.objects.filter(user=user, revoked=False).update(revoked=True)
+            actor = _get_actor(info)
+            if actor:
+                _audit(actor, 'DEACTIVATE_USER', 'user', user.user_id, _get_ip(info))
             return CoreMutationResponse(success=True, message="User deactivated successfully")
         except User.DoesNotExist:
             return CoreMutationResponse(success=False, message="User not found")
@@ -188,8 +261,8 @@ class CoreMutation:
                 username=input.user.username,
                 email=input.user.email,
                 password=input.user.password or 'temp123',
-                first_name=input.user.first_name,
-                last_name=input.user.last_name,
+                first_name=input.user.firstName,
+                last_name=input.user.lastName,
                 role='student',
                 phone=input.user.phone
             )
@@ -223,8 +296,8 @@ class CoreMutation:
                 username=input.user.username,
                 email=input.user.email,
                 password=input.user.password or 'temp123',
-                first_name=input.user.first_name,
-                last_name=input.user.last_name,
+                first_name=input.user.firstName,
+                last_name=input.user.lastName,
                 role='staff',
                 phone=input.user.phone
             )
@@ -646,11 +719,13 @@ class CoreMutation:
                 if User.objects.filter(username=input.username).exists():
                     return StaffMutationResponse(success=False, message=f"Username '{input.username}' is already taken")
 
-                from academics.models.academic_structure_models import Department
-                try:
-                    dept = Department.objects.get(dept_id=input.department_id)
-                except Department.DoesNotExist:
-                    return StaffMutationResponse(success=False, message="Department not found")
+                dept = None
+                if input.department_id:
+                    from academics.models.academic_structure_models import Department
+                    try:
+                        dept = Department.objects.get(dept_id=input.department_id)
+                    except Department.DoesNotExist:
+                        return StaffMutationResponse(success=False, message="Department not found")
 
                 user = User.objects.create_user(
                     username=input.username,
@@ -787,3 +862,35 @@ class CoreMutation:
             )
         except ClassGroup.DoesNotExist:
             return ClassGroupMutationResponse(success=False, message="Class group not found")
+
+    @strawberry.mutation
+    def revoke_refresh_token(self, info: strawberry.types.Info, token_id: strawberry.ID) -> CoreMutationResponse:
+        """Revoke a single active session (refresh token)."""
+        try:
+            token = RefreshToken.objects.get(token_id=token_id)
+            token.revoked = True
+            token.save(update_fields=['revoked'])
+            actor = _get_actor(info)
+            if actor:
+                _audit(actor, 'REVOKE_SESSION', 'refresh_tokens', token.token_id, _get_ip(info))
+            return CoreMutationResponse(success=True, message="Session revoked")
+        except RefreshToken.DoesNotExist:
+            return CoreMutationResponse(success=False, message="Session not found")
+        except Exception as e:
+            return CoreMutationResponse(success=False, message=f"Error: {str(e)}")
+
+    @strawberry.mutation
+    def revoke_all_sessions(self, info: strawberry.types.Info, user_id: Optional[strawberry.ID] = None) -> CoreMutationResponse:
+        """Revoke all active sessions, optionally scoped to a single user."""
+        try:
+            qs = RefreshToken.objects.filter(revoked=False, expires_at__gt=timezone.now())
+            if user_id:
+                qs = qs.filter(user_id=user_id)
+            count = qs.update(revoked=True)
+            actor = _get_actor(info)
+            if actor:
+                tid = _uuid_mod.UUID(str(user_id)) if user_id else actor.user_id
+                _audit(actor, 'REVOKE_ALL_SESSIONS', 'refresh_tokens', tid, _get_ip(info))
+            return CoreMutationResponse(success=True, message=f"{count} session(s) revoked")
+        except Exception as e:
+            return CoreMutationResponse(success=False, message=f"Error: {str(e)}")

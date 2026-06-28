@@ -358,7 +358,7 @@ class RegisterStaffInput:
     last_name: str
     staff_number: str
     position: str
-    department_id: strawberry.ID
+    department_id: Optional[strawberry.ID] = None
     phone: Optional[str] = None
 
 

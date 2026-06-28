@@ -21,7 +21,8 @@ class User(AbstractUser):
     """
     ROLE_CHOICES = [
         ('admin', 'Administrator'),
-        ('staff', 'Staff Member'),
+        ('it_technician', 'IT Technician'),
+        ('staff', 'Teacher'),
         ('student', 'Student'),
     ]
     
@@ -263,15 +264,21 @@ class Staff(models.Model):
         'academics.Department',
         on_delete=models.PROTECT,
         related_name='staff_members',
+        null=True,
+        blank=True,
         help_text="Department FK"
     )
     staff_number = models.CharField(
         max_length=50,
         unique=True,
+        null=True,
+        blank=True,
         help_text="Unique staff ID number"
     )
     position = models.CharField(
         max_length=150,
+        null=True,
+        blank=True,
         help_text="Staff position/title"
     )
     hire_date = models.DateField(

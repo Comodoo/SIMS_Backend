@@ -13,6 +13,7 @@ from core.schema.core_schema import (
 )
 from core.schema.biometric_schema import BiometricStatus, EnrollmentTokenInfo
 from core.schema.additional_core_schema import AuditLogType, RefreshTokenType, SecurityOverviewType
+from core.models.core_models import RefreshToken, AuditLog
 from academics.schema.academics_schema import EnrollmentType, AssignmentType
 
 
@@ -314,6 +315,44 @@ class CoreQuery:
                 seen.add(rec.staff_id)
                 results.append(AttendanceType.from_model(rec))
         return results
+
+    @strawberry.field
+    def security_overview(self) -> SecurityOverviewType:
+        """Aggregate security metrics for the Security Center dashboard."""
+        from django.utils import timezone
+        now = timezone.now()
+        active = RefreshToken.objects.filter(revoked=False, expires_at__gt=now)
+        return SecurityOverviewType(
+            active_sessions=active.count(),
+            total_active_users=active.values('user').distinct().count(),
+            audit_log_total=AuditLog.objects.count(),
+        )
+
+    @strawberry.field
+    def active_sessions(self, limit: int = 100) -> List[RefreshTokenType]:
+        """Non-revoked, non-expired refresh tokens (active sessions)."""
+        from django.utils import timezone
+        now = timezone.now()
+        qs = (RefreshToken.objects
+              .filter(revoked=False, expires_at__gt=now)
+              .select_related('user')
+              .order_by('-issued_at')[:limit])
+        return [RefreshTokenType.from_model(t) for t in qs]
+
+    @strawberry.field
+    def audit_logs(
+        self,
+        action: Optional[str] = None,
+        actor_id: Optional[strawberry.ID] = None,
+        limit: int = 200,
+    ) -> List[AuditLogType]:
+        """Audit log entries, newest first."""
+        qs = AuditLog.objects.select_related('actor').order_by('-performed_at')
+        if action:
+            qs = qs.filter(action__icontains=action)
+        if actor_id:
+            qs = qs.filter(actor_id=actor_id)
+        return [AuditLogType.from_model(log) for log in qs[:limit]]
 
     @strawberry.field
     def assignments(
