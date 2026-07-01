@@ -3228,3 +3228,11 @@ E:\Dev\Zee\SIMS_Backend\academics\mutations\academics_mutations.py changed, relo
 Watching for file changes with StatReloader
 E:\Dev\Zee\SIMS_Backend\academics\mutations\academics_mutations.py changed, reloading.
 Watching for file changes with StatReloader
+"POST /graphql/ HTTP/1.1" 200 3892
+"POST /graphql/ HTTP/1.1" 200 3892
+"POST /graphql/ HTTP/1.1" 200 2994
+"POST /graphql/ HTTP/1.1" 200 2994
+"POST /graphql/ HTTP/1.1" 200 2178
+"POST /graphql/ HTTP/1.1" 200 2994
+"POST /graphql/ HTTP/1.1" 200 145
+"POST /graphql/ HTTP/1.1" 200 3404
