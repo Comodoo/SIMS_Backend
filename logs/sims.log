@@ -3204,3 +3204,27 @@ Watching for file changes with StatReloader
 "POST /graphql/ HTTP/1.1" 200 2994
 "POST /graphql/ HTTP/1.1" 200 2178
 "POST /graphql/ HTTP/1.1" 200 50
+Watching for file changes with StatReloader
+"OPTIONS /graphql/ HTTP/1.1" 200 0
+"POST /graphql/ HTTP/1.1" 200 102
+"POST /graphql/ HTTP/1.1" 200 336
+"POST /graphql/ HTTP/1.1" 200 1963
+"POST /graphql/ HTTP/1.1" 200 1963
+"POST /graphql/ HTTP/1.1" 200 2994
+"POST /graphql/ HTTP/1.1" 200 2994
+"POST /graphql/ HTTP/1.1" 200 2178
+"POST /graphql/ HTTP/1.1" 200 152
+"POST /graphql/ HTTP/1.1" 200 921
+"POST /graphql/ HTTP/1.1" 200 28
+"POST /graphql/ HTTP/1.1" 200 656
+"POST /graphql/ HTTP/1.1" 200 656
+"POST /graphql/ HTTP/1.1" 200 921
+"POST /graphql/ HTTP/1.1" 200 28
+"POST /graphql/ HTTP/1.1" 200 1677
+"POST /graphql/ HTTP/1.1" 200 1677
+E:\Dev\Zee\SIMS_Backend\academics\mutations\academics_mutations.py changed, reloading.
+Watching for file changes with StatReloader
+E:\Dev\Zee\SIMS_Backend\academics\mutations\academics_mutations.py changed, reloading.
+Watching for file changes with StatReloader
+E:\Dev\Zee\SIMS_Backend\academics\mutations\academics_mutations.py changed, reloading.
+Watching for file changes with StatReloader

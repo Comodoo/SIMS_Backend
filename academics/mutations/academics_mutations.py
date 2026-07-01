@@ -45,6 +45,34 @@ def _error_response(message: str) -> AcademicsMutationResponse:
     return AcademicsMutationResponse(success=False, message=message)
 
 
+def _check_timetable_conflicts(semester_id, class_group, teacher_id, day_of_week, start_time, end_time, exclude_slot_id=None):
+    """Return (conflict: bool, message: str). Checks class-group and teacher double-booking."""
+    qs = Timetable.objects.filter(semester_id=semester_id, day_of_week=day_of_week)
+    if exclude_slot_id:
+        qs = qs.exclude(timetable_id=exclude_slot_id)
+
+    overlapping = qs.filter(start_time__lt=end_time, end_time__gt=start_time)
+
+    group_clash = overlapping.filter(class_group=class_group).first()
+    if group_clash:
+        return True, (
+            f"Class group '{class_group}' already has '{group_clash.subject.name}' "
+            f"on {day_of_week.capitalize()} from {group_clash.start_time.strftime('%H:%M')} "
+            f"to {group_clash.end_time.strftime('%H:%M')}."
+        )
+
+    teacher_clash = overlapping.filter(teacher_id=teacher_id).first()
+    if teacher_clash:
+        t = teacher_clash.teacher.user
+        return True, (
+            f"Teacher {t.first_name} {t.last_name} is already teaching '{teacher_clash.subject.name}' "
+            f"to {teacher_clash.class_group} on {day_of_week.capitalize()} "
+            f"from {teacher_clash.start_time.strftime('%H:%M')} to {teacher_clash.end_time.strftime('%H:%M')}."
+        )
+
+    return False, ""
+
+
 @strawberry.type
 class AcademicsMutation:
     """GraphQL mutations for Academics module"""
@@ -390,34 +418,6 @@ class AcademicsMutation:
 
     # --- Timetable mutations ---
 
-    def _check_timetable_conflicts(self, semester_id, class_group, teacher_id, day_of_week, start_time, end_time, exclude_slot_id=None):
-        """Return (conflict: bool, message: str). Checks class-group and teacher double-booking."""
-        qs = Timetable.objects.filter(semester_id=semester_id, day_of_week=day_of_week)
-        if exclude_slot_id:
-            qs = qs.exclude(timetable_id=exclude_slot_id)
-
-        # Time overlap: two periods overlap if start_a < end_b AND end_a > start_b
-        overlapping = qs.filter(start_time__lt=end_time, end_time__gt=start_time)
-
-        group_clash = overlapping.filter(class_group=class_group).first()
-        if group_clash:
-            return True, (
-                f"Class group '{class_group}' already has '{group_clash.subject.name}' "
-                f"on {day_of_week.capitalize()} from {group_clash.start_time.strftime('%H:%M')} "
-                f"to {group_clash.end_time.strftime('%H:%M')}."
-            )
-
-        teacher_clash = overlapping.filter(teacher_id=teacher_id).first()
-        if teacher_clash:
-            t = teacher_clash.teacher.user
-            return True, (
-                f"Teacher {t.first_name} {t.last_name} is already teaching '{teacher_clash.subject.name}' "
-                f"to {teacher_clash.class_group} on {day_of_week.capitalize()} "
-                f"from {teacher_clash.start_time.strftime('%H:%M')} to {teacher_clash.end_time.strftime('%H:%M')}."
-            )
-
-        return False, ""
-
     @strawberry.mutation
     def create_timetable_slot(self, input: TimetableInput) -> TimetableMutationResponse:
         """Admin: create a timetable slot."""
@@ -428,7 +428,7 @@ class AcademicsMutation:
             teacher = Staff.objects.get(staff_id=input.teacher_id)
             semester = Semester.objects.get(semester_id=input.semester_id)
 
-            conflict, msg = self._check_timetable_conflicts(
+            conflict, msg = _check_timetable_conflicts(
                 semester_id=semester.semester_id,
                 class_group=input.class_group,
                 teacher_id=teacher.staff_id,
@@ -466,7 +466,7 @@ class AcademicsMutation:
             teacher = Staff.objects.get(staff_id=input.teacher_id)
             semester = Semester.objects.get(semester_id=input.semester_id)
 
-            conflict, msg = self._check_timetable_conflicts(
+            conflict, msg = _check_timetable_conflicts(
                 semester_id=semester.semester_id,
                 class_group=input.class_group,
                 teacher_id=teacher.staff_id,
