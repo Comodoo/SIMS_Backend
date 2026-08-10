@@ -279,6 +279,9 @@ class ResultCardType:
     grade_letter: Optional[str]
     remarks: Optional[str]
     computed_at: datetime
+    status: str
+    batch_id: Optional[strawberry.ID]
+    published_at: Optional[datetime]
 
     @classmethod
     def from_model(cls, instance: ResultCard):
@@ -295,6 +298,9 @@ class ResultCardType:
             grade_letter=instance.grade_letter,
             remarks=instance.remarks,
             computed_at=instance.computed_at,
+            status=instance.status,
+            batch_id=strawberry.ID(str(instance.batch_id)) if instance.batch_id else None,
+            published_at=instance.published_at,
         )
 
 
@@ -445,3 +451,50 @@ class ResultCardMutationResponse:
     success: bool
     message: str
     result: Optional[ResultCardType] = None
+
+
+# --- Bulk ResultCard import (bulk grading via CSV/Excel) ---
+
+@strawberry.input
+class BulkResultCardRowInput:
+    student_id: strawberry.ID
+    cat1_score: Optional[Decimal] = None
+    cat2_score: Optional[Decimal] = None
+    exam_score: Optional[Decimal] = None
+    remarks: Optional[str] = None
+
+
+@strawberry.input
+class BulkResultCardInput:
+    subject_id: strawberry.ID
+    semester_id: strawberry.ID
+    rows: List[BulkResultCardRowInput]
+
+
+@strawberry.type
+class BulkResultRowError:
+    student_id: strawberry.ID
+    message: str
+
+
+@strawberry.type
+class BulkResultCardMutationResponse:
+    success: bool
+    message: str
+    saved_count: int
+    failed_count: int
+    results: List[ResultCardType]
+    errors: List[BulkResultRowError]
+    batch_id: Optional[strawberry.ID] = None
+
+
+@strawberry.type
+class ResultBatchType:
+    """Summary of one bulk-import batch, for the teacher's draft-review list."""
+    batch_id: strawberry.ID
+    subject: CourseType
+    semester_id: strawberry.ID
+    semester_name: str
+    status: str
+    student_count: int
+    created_at: datetime

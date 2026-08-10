@@ -12,6 +12,7 @@ from academics.schema.academics_schema import (
     AssignTeacherInput, TimetableInput, ResultCardInput,
     SubjectTeacherType, TimetableType, ResultCardType,
     SubjectTeacherMutationResponse, TimetableMutationResponse, ResultCardMutationResponse,
+    BulkResultCardInput, BulkResultCardMutationResponse, BulkResultRowError,
 )
 
 
@@ -529,7 +530,6 @@ class AcademicsMutation:
             result.cat1_score = input.cat1_score
             result.cat2_score = input.cat2_score
             result.exam_score = input.exam_score
-            result.remarks = input.remarks
             result.computed_by = teacher
 
             # Total = CAT1 + CAT2 + Exam (teacher scales each to its weight, e.g. 20+20+60=100)
@@ -537,6 +537,8 @@ class AcademicsMutation:
             if scores:
                 result.total_score = sum(scores)
             result.grade_letter = result.compute_grade_letter()
+            # Remarks default to a grade-based comment unless the teacher typed their own.
+            result.remarks = input.remarks or result.default_remark()
             result.save()
 
             return ResultCardMutationResponse(
@@ -545,3 +547,104 @@ class AcademicsMutation:
             )
         except Exception as e:
             return ResultCardMutationResponse(success=False, message=f"Error: {str(e)}")
+
+    @strawberry.mutation
+    def bulk_compute_result_cards(self, input: BulkResultCardInput, computed_by_id: strawberry.ID) -> BulkResultCardMutationResponse:
+        """Teacher/Admin: create or update result cards for many students at once (bulk CSV/Excel import)."""
+        from core.models.core_models import Staff, Student
+        from academics.models.academic_structure_models import Semester
+
+        try:
+            subject = Course.objects.get(course_id=input.subject_id)
+            semester = Semester.objects.get(semester_id=input.semester_id)
+            teacher = Staff.objects.get(staff_id=computed_by_id)
+        except Course.DoesNotExist:
+            return BulkResultCardMutationResponse(
+                success=False, message="Subject not found", saved_count=0,
+                failed_count=len(input.rows), results=[], errors=[]
+            )
+        except Semester.DoesNotExist:
+            return BulkResultCardMutationResponse(
+                success=False, message="Semester not found", saved_count=0,
+                failed_count=len(input.rows), results=[], errors=[]
+            )
+        except Staff.DoesNotExist:
+            return BulkResultCardMutationResponse(
+                success=False, message="Teacher not found", saved_count=0,
+                failed_count=len(input.rows), results=[], errors=[]
+            )
+
+        import uuid as _uuid
+        batch_id = _uuid.uuid4()
+
+        saved_results = []
+        row_errors = []
+
+        for row in input.rows:
+            try:
+                student = Student.objects.get(student_id=row.student_id)
+
+                result, _ = ResultCard.objects.get_or_create(
+                    student=student, subject=subject, semester=semester,
+                    defaults={'computed_by': teacher}
+                )
+                result.cat1_score = row.cat1_score
+                result.cat2_score = row.cat2_score
+                result.exam_score = row.exam_score
+                result.computed_by = teacher
+
+                scores = [s for s in [row.cat1_score, row.cat2_score, row.exam_score] if s is not None]
+                result.total_score = sum(scores) if scores else None
+                result.grade_letter = result.compute_grade_letter()
+                # Remarks default to a grade-based comment unless the teacher typed their own
+                # in the Remarks column of the uploaded sheet.
+                result.remarks = row.remarks or result.default_remark()
+
+                # Bulk-imported results start as drafts — hidden from the student until the
+                # teacher reviews the batch and explicitly publishes it.
+                result.status = 'draft'
+                result.batch_id = batch_id
+                result.published_at = None
+                result.save()
+
+                saved_results.append(ResultCardType.from_model(result))
+            except Student.DoesNotExist:
+                row_errors.append(BulkResultRowError(student_id=row.student_id, message="Student not found"))
+            except Exception as e:
+                row_errors.append(BulkResultRowError(student_id=row.student_id, message=str(e)))
+
+        return BulkResultCardMutationResponse(
+            success=len(saved_results) > 0,
+            message=f"Saved {len(saved_results)} of {len(input.rows)} result card(s) as draft",
+            saved_count=len(saved_results),
+            failed_count=len(row_errors),
+            results=saved_results,
+            errors=row_errors,
+            batch_id=strawberry.ID(str(batch_id)) if saved_results else None,
+        )
+
+    @strawberry.mutation
+    def publish_result_batch(self, batch_id: strawberry.ID, published_by_id: strawberry.ID) -> BulkResultCardMutationResponse:
+        """Teacher/Admin: publish every result card in a draft batch, making them visible to students."""
+        from django.utils import timezone
+
+        batch_qs = ResultCard.objects.filter(batch_id=batch_id)
+        count = batch_qs.count()
+        if count == 0:
+            return BulkResultCardMutationResponse(
+                success=False, message="Batch not found", saved_count=0,
+                failed_count=0, results=[], errors=[], batch_id=None
+            )
+
+        batch_qs.update(status='published', published_at=timezone.now())
+        results = [ResultCardType.from_model(r) for r in ResultCard.objects.filter(batch_id=batch_id)]
+
+        return BulkResultCardMutationResponse(
+            success=True,
+            message=f"Published {count} result(s) — now visible to students",
+            saved_count=count,
+            failed_count=0,
+            results=results,
+            errors=[],
+            batch_id=batch_id,
+        )

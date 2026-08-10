@@ -150,6 +150,11 @@ class ResultCard(models.Model):
         ('F', 'F — Fail (0-39)'),
     ]
 
+    STATUS_CHOICES = [
+        ('draft', 'Draft — not visible to student'),
+        ('published', 'Published — visible to student'),
+    ]
+
     result_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student = models.ForeignKey(
         'core.Student',
@@ -197,6 +202,15 @@ class ResultCard(models.Model):
         help_text="Teacher who computed/approved this result"
     )
     computed_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default='published', db_index=True,
+        help_text="Draft results are hidden from the student until published"
+    )
+    batch_id = models.UUIDField(
+        null=True, blank=True, db_index=True,
+        help_text="Groups result cards created/updated together in one bulk import, for draft review"
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'result_cards'
@@ -228,3 +242,18 @@ class ResultCard(models.Model):
         elif score >= 40:
             return 'E'
         return 'F'
+
+    DEFAULT_REMARKS = {
+        'A': 'Excellent performance.',
+        'B': 'Good performance.',
+        'C': 'Average performance.',
+        'D': 'Below average performance — needs improvement.',
+        'E': 'Poor performance — needs significant improvement.',
+        'F': 'Failed — requires urgent attention.',
+    }
+
+    def default_remark(self):
+        """Auto remark derived from the grade letter, used whenever a teacher leaves remarks blank."""
+        if not self.grade_letter:
+            return None
+        return self.DEFAULT_REMARKS.get(self.grade_letter)

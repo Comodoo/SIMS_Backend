@@ -8,7 +8,7 @@ from academics.models.academics_models import Course, Enrollment, Assignment, Su
 from academics.models.grading_models import ResultCard
 from academics.schema.academics_schema import (
     CourseType, EnrollmentType, AssignmentType, SubmissionType,
-    SubjectTeacherType, TimetableType, ResultCardType,
+    SubjectTeacherType, TimetableType, ResultCardType, ResultBatchType,
 )
 
 
@@ -156,8 +156,14 @@ class AcademicsQuery:
         subject_id: Optional[strawberry.ID] = None,
         grade_level: Optional[str] = None,
         academic_year: Optional[str] = None,
+        batch_id: Optional[strawberry.ID] = None,
+        include_drafts: bool = False,
     ) -> List[ResultCardType]:
-        """Get result cards. Filter by student, semester, subject, grade_level, or academic_year."""
+        """Get result cards. Filter by student, semester, subject, grade_level, batch, or academic_year.
+
+        Draft (unpublished, bulk-imported) results are hidden unless include_drafts=True —
+        student-facing pages must never pass include_drafts.
+        """
         qs = ResultCard.objects.select_related('student', 'subject', 'semester')
         if student_id:
             qs = qs.filter(student_id=student_id)
@@ -169,7 +175,57 @@ class AcademicsQuery:
             qs = qs.filter(student__grade_level__iexact=grade_level)
         if academic_year:
             qs = qs.filter(semester__academic_year=academic_year)
+        if batch_id:
+            qs = qs.filter(batch_id=batch_id)
+        if not include_drafts:
+            qs = qs.filter(status='published')
         return [ResultCardType.from_model(r) for r in qs]
+
+    @strawberry.field
+    def result_batches(
+        self,
+        subject_id: Optional[strawberry.ID] = None,
+        semester_id: Optional[strawberry.ID] = None,
+        teacher_id: Optional[strawberry.ID] = None,
+    ) -> List[ResultBatchType]:
+        """List bulk-import batches (draft review list) for a teacher/subject."""
+        from django.db.models import Count, Min
+
+        qs = ResultCard.objects.filter(batch_id__isnull=False)
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+        if semester_id:
+            qs = qs.filter(semester_id=semester_id)
+        if teacher_id:
+            qs = qs.filter(computed_by_id=teacher_id)
+
+        grouped = (
+            qs.values('batch_id', 'subject_id', 'semester_id', 'status')
+            .annotate(student_count=Count('result_id'), created_at=Min('computed_at'))
+            .order_by('-created_at')
+        )
+
+        subjects = {c.course_id: c for c in Course.objects.filter(
+            course_id__in=[g['subject_id'] for g in grouped]
+        )}
+        from academics.models.academic_structure_models import Semester
+        semesters = {s.semester_id: s for s in Semester.objects.filter(
+            semester_id__in=[g['semester_id'] for g in grouped]
+        )}
+
+        return [
+            ResultBatchType(
+                batch_id=strawberry.ID(str(g['batch_id'])),
+                subject=CourseType.from_model(subjects[g['subject_id']]),
+                semester_id=strawberry.ID(str(g['semester_id'])),
+                semester_name=semesters[g['semester_id']].name if g['semester_id'] in semesters else '',
+                status=g['status'],
+                student_count=g['student_count'],
+                created_at=g['created_at'],
+            )
+            for g in grouped
+            if g['subject_id'] in subjects
+        ]
 
 
 # Forward references for type hints
